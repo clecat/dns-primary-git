@@ -171,6 +171,18 @@ let tls_cert_fingerprint =
   let doc = Key.Arg.info ~doc:"The fingerprint of the TLS certificate." [ "tls-cert-fingerprint" ] in
   Key.(create "tls_cert_fingerprint" Arg.(opt (some string) None doc))
 
+let monitor =
+  let doc = Key.Arg.info ~doc:"monitor host IP" ["monitor"] in
+  Key.(create "monitor" Arg.(opt (some ip_address) None doc))
+
+let syslog =
+  let doc = Key.Arg.info ~doc:"syslog host IP" ["syslog"] in
+  Key.(create "syslog" Arg.(opt (some ip_address) None doc))
+
+let name =
+  let doc = Key.Arg.info ~doc:"Name of the unikernel" ["name"] in
+  Key.(create "name" Arg.(opt string "ns.nqsb.io" doc))
+
 let mimic_impl random stackv4v6 mclock pclock time =
   let tcpv4v6 = tcpv4v6_of_stackv4v6 $ stackv4v6 in
   let mhappy_eyeballs = mimic_happy_eyeballs $ random $ time $ mclock $ pclock $ stackv4v6 in
@@ -198,14 +210,21 @@ let dns_handler =
     package ~min:"3.7.0" "git-mirage";
     package ~min:"3.7.0" "git-paf";
     package ~min:"0.0.8" ~sublibs:["mirage"] "paf";
+    package ~min:"0.0.2" "monitoring-experiments";
+    package ~sublibs:["mirage"] ~min:"0.3.0" "logs-syslog";
   ] in
   foreign
-    ~keys:[Key.abstract remote_k ; Key.abstract axfr]
+    ~keys:[
+      Key.abstract remote_k ; Key.abstract axfr ;
+      Key.abstract name ; Key.abstract monitor ; Key.abstract syslog
+    ]
     ~packages
     "Unikernel.Main"
-    (random @-> pclock @-> mclock @-> time @-> stackv4v6 @-> mimic @-> job)
+    (console @-> random @-> pclock @-> mclock @-> time @-> stackv4v6 @-> mimic @-> stackv4v6 @-> job)
+
+let management_stack = generic_stackv4v6 ~group:"management" (netif ~group:"management" "management")
 
 let () =
   register "primary-git"
-    [dns_handler $ default_random $ default_posix_clock $ default_monotonic_clock $
-     default_time $ net $ mimic_impl]
+    [dns_handler $ default_console $ default_random $ default_posix_clock $ default_monotonic_clock $
+     default_time $ net $ mimic_impl $ management_stack]
